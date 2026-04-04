@@ -3,163 +3,646 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Juego simple: Atrapa el cuadro</title>
+    <title>Niño en el Estadio - Juego 2D</title>
     <style>
       :root {
-        font-family: Arial, Helvetica, sans-serif;
         color-scheme: light;
+        font-family: 'Trebuchet MS', Arial, sans-serif;
       }
 
       body {
         margin: 0;
         min-height: 100vh;
+        background: linear-gradient(#9ed8ff, #dbf4ff);
         display: grid;
         place-items: center;
-        background: #f3f6ff;
       }
 
-      .game {
-        width: min(92vw, 600px);
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
-        padding: 1rem 1rem 1.5rem;
+      .wrap {
+        width: min(96vw, 1100px);
       }
 
       h1 {
         margin: 0 0 0.5rem;
-        font-size: 1.5rem;
+        color: #0f335c;
+        font-size: clamp(1.1rem, 2.6vw, 2rem);
       }
 
       .hud {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
+        gap: 0.9rem;
+        margin: 0.35rem 0 0.6rem;
+        color: #102338;
+        font-weight: 700;
       }
 
-      button {
-        border: none;
+      .panel {
+        background: #ffffffcc;
         border-radius: 10px;
-        padding: 0.65rem 0.9rem;
-        background: #2e6bff;
-        color: #fff;
-        font-weight: bold;
-        cursor: pointer;
+        padding: 0.35rem 0.6rem;
+        box-shadow: 0 3px 9px #00000024;
       }
 
-      .arena {
-        position: relative;
+      canvas {
         width: 100%;
-        height: 360px;
-        border-radius: 12px;
-        overflow: hidden;
-        background: linear-gradient(180deg, #e8eeff, #d7e4ff);
-        border: 2px dashed #8aa5ff;
+        height: auto;
+        display: block;
+        border-radius: 14px;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+        border: 2px solid #1f5d23;
+        background: #7cc8ff;
       }
 
-      .target {
-        position: absolute;
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        background: #ff3b5c;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-        cursor: pointer;
-        transition: transform 0.12s ease;
+      .help {
+        margin-top: 0.5rem;
+        font-size: 0.95rem;
+        color: #0f335c;
+        background: #ffffffcc;
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
       }
 
-      .target:active {
-        transform: scale(0.9);
-      }
-
-      .msg {
-        margin-top: 0.75rem;
-        color: #334;
+      code {
+        background: #e8f3ff;
+        padding: 0.05rem 0.25rem;
+        border-radius: 5px;
       }
     </style>
   </head>
   <body>
-    <main class="game">
-      <h1>Atrapa el cuadro</h1>
+    <main class="wrap">
+      <h1>Niño en el Estadio ⚽ — Corre, esquiva y sobrevive</h1>
       <div class="hud">
-        <p>Puntos: <strong id="score">0</strong></p>
-        <p>Tiempo: <strong id="time">20</strong>s</p>
-        <button id="startBtn">Iniciar</button>
+        <span class="panel">Distancia: <span id="distance">0</span> m</span>
+        <span class="panel">Estado: <span id="state">idle</span></span>
+        <span class="panel">Escudo: <span id="shield">listo</span></span>
+        <span class="panel">Ronda: <span id="round">1</span></span>
       </div>
-      <section id="arena" class="arena" aria-label="Área de juego">
-        <button id="target" class="target" aria-label="Objetivo" hidden></button>
-      </section>
-      <p id="message" class="msg">Presiona "Iniciar" para jugar.</p>
+      <canvas id="game" width="1100" height="560"></canvas>
+      <p class="help">
+        Controles: <code>→</code> correr, <code>↑</code> saltar, <code>↓</code> agacharse,
+        <code>←</code> acostarse, <code>A</code> disparar, <code>S</code> escudo, <code>D</code> reservado.
+      </p>
     </main>
 
     <script>
-      const arena = document.getElementById('arena');
-      const target = document.getElementById('target');
-      const scoreEl = document.getElementById('score');
-      const timeEl = document.getElementById('time');
-      const messageEl = document.getElementById('message');
-      const startBtn = document.getElementById('startBtn');
+      // Juego 2D lateral sin dependencias. Todo renderizado en Canvas.
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const hudDistance = document.getElementById('distance');
+      const hudState = document.getElementById('state');
+      const hudShield = document.getElementById('shield');
+      const hudRound = document.getElementById('round');
 
-      const TOTAL_TIME = 20;
-      let score = 0;
-      let timeLeft = TOTAL_TIME;
-      let timerId = null;
-      let playing = false;
+      const W = canvas.width;
+      const H = canvas.height;
+      const GRAVITY = 1400;
+      const MAX_SLOPE_DEG = 30;
+      const MAX_SLOPE = Math.tan((MAX_SLOPE_DEG * Math.PI) / 180);
+      const SEGMENT_W = 180;
+      const keys = new Set();
 
-      function randomPosition() {
-        const maxX = arena.clientWidth - target.offsetWidth;
-        const maxY = arena.clientHeight - target.offsetHeight;
-        const x = Math.floor(Math.random() * Math.max(maxX, 1));
-        const y = Math.floor(Math.random() * Math.max(maxY, 1));
-        target.style.left = `${x}px`;
-        target.style.top = `${y}px`;
+      const game = {
+        terrain: [],
+        player: null,
+        enemies: [],
+        balls: [],
+        projectiles: [],
+        particles: [],
+        cameraX: 0,
+        distance: 0,
+        round: 1,
+        alive: true,
+        restartTimer: 0,
+        enemyTimer: 0,
+        t: 0,
+      };
+
+      function rand(min, max) {
+        return Math.random() * (max - min) + min;
       }
 
-      function finishGame() {
-        playing = false;
-        clearInterval(timerId);
-        target.hidden = true;
-        startBtn.disabled = false;
-        messageEl.textContent = `⏱️ Tiempo terminado. Puntaje final: ${score}`;
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
       }
 
-      function tick() {
-        timeLeft -= 1;
-        timeEl.textContent = timeLeft;
-        if (timeLeft <= 0) {
-          finishGame();
+      function setupTerrain() {
+        game.terrain = [{ x: -300, y: 450 }];
+        for (let i = 1; i < 80; i += 1) {
+          const prev = game.terrain[i - 1];
+          const dx = SEGMENT_W;
+          // Limita la variación vertical para mantener pendiente <= 30°.
+          const maxDY = dx * MAX_SLOPE;
+          const dy = rand(-maxDY * 0.9, maxDY * 0.9);
+          const y = clamp(prev.y + dy, 350, 500);
+          game.terrain.push({ x: prev.x + dx, y });
         }
       }
 
-      function startGame() {
-        score = 0;
-        timeLeft = TOTAL_TIME;
-        scoreEl.textContent = score;
-        timeEl.textContent = timeLeft;
-        messageEl.textContent = '¡Haz clic en el cuadro rojo tantas veces como puedas!';
-
-        playing = true;
-        startBtn.disabled = true;
-        target.hidden = false;
-        randomPosition();
-
-        clearInterval(timerId);
-        timerId = setInterval(tick, 1000);
+      function ensureTerrainAhead(xTarget) {
+        while (game.terrain[game.terrain.length - 1].x < xTarget) {
+          const prev = game.terrain[game.terrain.length - 1];
+          const maxDY = SEGMENT_W * MAX_SLOPE;
+          const dy = rand(-maxDY * 0.9, maxDY * 0.9);
+          const y = clamp(prev.y + dy, 350, 500);
+          game.terrain.push({ x: prev.x + SEGMENT_W, y });
+        }
       }
 
-      target.addEventListener('click', () => {
-        if (!playing) return;
-        score += 1;
-        scoreEl.textContent = score;
-        randomPosition();
-      });
+      function groundAt(x) {
+        ensureTerrainAhead(x + 1000);
+        for (let i = 0; i < game.terrain.length - 1; i += 1) {
+          const a = game.terrain[i];
+          const b = game.terrain[i + 1];
+          if (x >= a.x && x <= b.x) {
+            const t = (x - a.x) / (b.x - a.x);
+            return a.y + (b.y - a.y) * t;
+          }
+        }
+        return 460;
+      }
 
-      startBtn.addEventListener('click', startGame);
-      window.addEventListener('resize', () => {
-        if (playing) randomPosition();
-      });
+      function slopeAt(x) {
+        const eps = 2;
+        return (groundAt(x + eps) - groundAt(x - eps)) / (2 * eps);
+      }
+
+      function resetGame() {
+        setupTerrain();
+        const spawnX = 100;
+        const g = groundAt(spawnX);
+        game.player = {
+          x: spawnX,
+          y: g - 68,
+          w: 38,
+          h: 68,
+          vx: 0,
+          vy: 0,
+          onGround: true,
+          crouching: false,
+          prone: false,
+          shieldTime: 0,
+          shieldCd: 0,
+          shootFlash: 0,
+          dead: false,
+          state: 'idle',
+        };
+
+        game.enemies = [];
+        game.balls = [];
+        game.projectiles = [];
+        game.particles = [];
+        game.cameraX = 0;
+        game.distance = 0;
+        game.alive = true;
+        game.restartTimer = 0;
+        game.enemyTimer = rand(0.8, 1.8);
+      }
+
+      function makeEnemy() {
+        const px = game.player.x;
+        const x = px + rand(540, 920);
+        const g = groundAt(x);
+        game.enemies.push({ x, y: g - 70, w: 36, h: 70, throwIn: rand(0.35, 1.1), done: false });
+      }
+
+      function makeBall(enemy) {
+        const type = Math.random() < 0.34 ? 'low' : Math.random() < 0.5 ? 'mid' : 'high';
+        const yOffset = type === 'low' ? 60 : type === 'mid' ? 38 : 14;
+        game.balls.push({
+          x: enemy.x + 6,
+          y: groundAt(enemy.x) - yOffset,
+          r: 12,
+          vx: -rand(310, 420),
+          type,
+          alive: true,
+        });
+      }
+
+      function shoot() {
+        const p = game.player;
+        if (!game.alive || p.dead) return;
+        p.shootFlash = 0.16;
+        game.projectiles.push({ x: p.x + p.w + 6, y: p.y + p.h * 0.48, w: 24, h: 7, vx: 540 });
+      }
+
+      function activateShield() {
+        const p = game.player;
+        if (!game.alive || p.dead) return;
+        if (p.shieldCd > 0 || p.shieldTime > 0) return;
+        p.shieldTime = 0.45;
+        p.shieldCd = 1.4;
+      }
+
+      function keydown(e) {
+        const k = e.key.toLowerCase();
+        if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'a', 's', 'd', ' '].includes(k)) {
+          e.preventDefault();
+        }
+
+        if (k === 'a') shoot();
+        if (k === 's') activateShield();
+        // D queda reservada (sin acción).
+        keys.add(k);
+      }
+
+      function keyup(e) {
+        keys.delete(e.key.toLowerCase());
+      }
+
+      function bodyRect(p) {
+        // Ajusta hitbox según postura para permitir esquivar balones altos/bajos.
+        if (p.prone) {
+          return { x: p.x - 3, y: p.y + p.h - 20, w: p.w + 24, h: 20 };
+        }
+        if (p.crouching) {
+          return { x: p.x, y: p.y + 24, w: p.w, h: p.h - 24 };
+        }
+        return { x: p.x, y: p.y, w: p.w, h: p.h };
+      }
+
+      function circleRectCollide(cx, cy, r, rect) {
+        const nx = clamp(cx, rect.x, rect.x + rect.w);
+        const ny = clamp(cy, rect.y, rect.y + rect.h);
+        const dx = cx - nx;
+        const dy = cy - ny;
+        return dx * dx + dy * dy <= r * r;
+      }
+
+      function update(dt) {
+        game.t += dt;
+        const p = game.player;
+
+        if (!game.alive) {
+          game.restartTimer -= dt;
+          if (game.restartTimer <= 0) {
+            game.round += 1;
+            resetGame();
+          }
+          return;
+        }
+
+        p.crouching = keys.has('arrowdown');
+        p.prone = keys.has('arrowleft');
+
+        if (keys.has('arrowup') && p.onGround && !p.crouching && !p.prone) {
+          p.vy = -560;
+          p.onGround = false;
+        }
+
+        if (keys.has('arrowright') && !p.prone) {
+          p.vx = 235;
+        } else {
+          p.vx = 80;
+        }
+
+        p.shieldTime = Math.max(0, p.shieldTime - dt);
+        p.shieldCd = Math.max(0, p.shieldCd - dt);
+        p.shootFlash = Math.max(0, p.shootFlash - dt);
+
+        p.vy += GRAVITY * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        const g = groundAt(p.x + p.w * 0.45);
+        const footY = p.y + p.h;
+        if (footY >= g) {
+          p.y = g - p.h;
+          p.vy = 0;
+          p.onGround = true;
+        } else {
+          p.onGround = false;
+        }
+
+        game.cameraX = p.x - 180;
+        game.distance = Math.max(0, Math.floor((p.x - 100) / 8));
+
+        // Enemigos frecuentes para mantener acción constante.
+        game.enemyTimer -= dt;
+        if (game.enemyTimer <= 0) {
+          makeEnemy();
+          game.enemyTimer = rand(1.15, 2.05);
+        }
+
+        for (const enemy of game.enemies) {
+          enemy.y = groundAt(enemy.x) - enemy.h;
+          enemy.throwIn -= dt;
+          if (!enemy.done && enemy.throwIn <= 0) {
+            makeBall(enemy);
+            enemy.done = true;
+          }
+        }
+        game.enemies = game.enemies.filter((e) => e.x > p.x - 450 && e.x < p.x + 1500);
+
+        for (const ball of game.balls) {
+          ball.x += ball.vx * dt;
+          // Balón sigue aprox el terreno en su altura de trayectoria.
+          const base = groundAt(ball.x);
+          const yOffset = ball.type === 'low' ? 12 : ball.type === 'mid' ? 44 : 86;
+          ball.y = base - yOffset;
+        }
+
+        for (const proj of game.projectiles) {
+          proj.x += proj.vx * dt;
+        }
+
+        // Colisiones proyectil vs balón medio.
+        for (const proj of game.projectiles) {
+          for (const ball of game.balls) {
+            if (ball.type !== 'mid' || !ball.alive) continue;
+            const hit =
+              proj.x < ball.x + ball.r &&
+              proj.x + proj.w > ball.x - ball.r &&
+              proj.y < ball.y + ball.r &&
+              proj.y + proj.h > ball.y - ball.r;
+            if (hit) {
+              ball.alive = false;
+              proj.x = 999999;
+              for (let i = 0; i < 8; i += 1) {
+                game.particles.push({ x: ball.x, y: ball.y, vx: rand(-120, 120), vy: rand(-150, 10), t: 0.4 });
+              }
+            }
+          }
+        }
+
+        const playerHit = bodyRect(p);
+        const shieldRect = { x: p.x + p.w - 2, y: p.y + 16, w: 26, h: 32 };
+
+        for (const ball of game.balls) {
+          if (!ball.alive) continue;
+
+          // Escudo solo protege balones de altura media.
+          if (p.shieldTime > 0 && ball.type === 'mid' && circleRectCollide(ball.x, ball.y, ball.r, shieldRect)) {
+            ball.alive = false;
+            for (let i = 0; i < 7; i += 1) {
+              game.particles.push({ x: ball.x, y: ball.y, vx: rand(-80, 80), vy: rand(-120, -10), t: 0.35, shield: true });
+            }
+            continue;
+          }
+
+          if (circleRectCollide(ball.x, ball.y, ball.r, playerHit)) {
+            const safeLow = ball.type === 'low' && !p.onGround;
+            const safeHigh = ball.type === 'high' && (p.crouching || p.prone);
+            const safeMid = false; // medio solo con proyectil o escudo
+
+            if (!(safeLow || safeHigh || safeMid)) {
+              game.alive = false;
+              p.dead = true;
+              p.state = 'dead';
+              game.restartTimer = 1.15;
+            }
+          }
+        }
+
+        game.balls = game.balls.filter((b) => b.alive && b.x > p.x - 500 && b.x < p.x + 900);
+        game.projectiles = game.projectiles.filter((pr) => pr.x < p.x + 1300);
+
+        for (const pt of game.particles) {
+          pt.t -= dt;
+          pt.x += pt.vx * dt;
+          pt.y += pt.vy * dt;
+          pt.vy += 380 * dt;
+        }
+        game.particles = game.particles.filter((pt) => pt.t > 0);
+
+        // Estado visual del jugador.
+        if (!game.alive) p.state = 'dead';
+        else if (p.shieldTime > 0) p.state = 'shield';
+        else if (p.shootFlash > 0) p.state = 'shoot';
+        else if (p.prone) p.state = 'prone';
+        else if (p.crouching) p.state = 'crouch';
+        else if (!p.onGround) p.state = 'jump';
+        else if (keys.has('arrowright')) p.state = 'run';
+        else p.state = 'idle';
+
+        hudDistance.textContent = game.distance;
+        hudState.textContent = p.state;
+        hudRound.textContent = game.round;
+        hudShield.textContent = p.shieldTime > 0 ? 'activo' : p.shieldCd > 0 ? `recarga ${p.shieldCd.toFixed(1)}s` : 'listo';
+      }
+
+      function drawStadiumBackground() {
+        // Cielo
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#7ecbff');
+        grad.addColorStop(1, '#d6f4ff');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Graderías simplificadas de estadio
+        ctx.fillStyle = '#d9dfe8';
+        ctx.fillRect(0, 150, W, 110);
+        ctx.fillStyle = '#b8c3d3';
+        for (let y = 154; y < 250; y += 18) {
+          for (let x = (y % 36) * 0.8; x < W; x += 18) {
+            ctx.fillRect(x, y, 8, 6);
+          }
+        }
+
+        // Vallas y césped del campo
+        ctx.fillStyle = '#2f7c39';
+        ctx.fillRect(0, 255, W, H - 255);
+        ctx.fillStyle = '#3d9545';
+        for (let i = 0; i < 14; i += 1) {
+          ctx.fillRect(i * 80 + ((game.cameraX * 0.22) % 80), 255, 40, H - 255);
+        }
+      }
+
+      function drawTerrain() {
+        ctx.beginPath();
+        for (let i = 0; i < game.terrain.length; i += 1) {
+          const p = game.terrain[i];
+          const sx = p.x - game.cameraX;
+          const sy = p.y;
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.lineTo(W + 100, H + 80);
+        ctx.lineTo(-100, H + 80);
+        ctx.closePath();
+
+        const roadGrad = ctx.createLinearGradient(0, 320, 0, H);
+        roadGrad.addColorStop(0, '#b19a67');
+        roadGrad.addColorStop(1, '#8c7447');
+        ctx.fillStyle = roadGrad;
+        ctx.fill();
+
+        // Borde del camino.
+        ctx.strokeStyle = '#f8e38e';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        for (let i = 0; i < game.terrain.length; i += 1) {
+          const p = game.terrain[i];
+          const sx = p.x - game.cameraX;
+          const sy = p.y;
+          if (i === 0) ctx.moveTo(sx, sy - 1);
+          else ctx.lineTo(sx, sy - 1);
+        }
+        ctx.stroke();
+      }
+
+      function drawPlayer() {
+        const p = game.player;
+        const x = p.x - game.cameraX;
+        const y = p.y;
+
+        // Sombra
+        ctx.fillStyle = '#00000030';
+        ctx.beginPath();
+        ctx.ellipse(x + p.w / 2, groundAt(p.x + p.w / 2) + 4, 24, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (p.state === 'dead') {
+          ctx.fillStyle = '#8a1d1d';
+          ctx.fillRect(x - 4, y + p.h - 16, p.w + 24, 14);
+          return;
+        }
+
+        // Cuerpo tipo caricatura (niño principal: camiseta azul)
+        const bodyH = p.prone ? 18 : p.crouching ? 34 : 42;
+        const bodyY = y + p.h - bodyH - 8;
+        const bodyW = p.prone ? p.w + 20 : p.w;
+
+        ctx.fillStyle = '#2f5dff';
+        ctx.fillRect(x, bodyY, bodyW, bodyH);
+
+        // Cabeza
+        const headY = p.prone ? bodyY - 8 : bodyY - 20;
+        ctx.fillStyle = '#f4c9a1';
+        ctx.beginPath();
+        ctx.arc(x + 16, headY, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Piernas
+        if (!p.prone) {
+          ctx.fillStyle = '#1f2a3f';
+          const runSwing = p.state === 'run' ? Math.sin(game.t * 16) * 6 : 0;
+          ctx.fillRect(x + 5, y + p.h - 16, 9, 16 - runSwing * 0.2);
+          ctx.fillRect(x + 22, y + p.h - 16 + runSwing * 0.2, 9, 16);
+        }
+
+        // Brazos
+        ctx.fillStyle = '#f2bb8f';
+        const armX = x + (p.prone ? 28 : p.w);
+        ctx.fillRect(armX - 4, bodyY + 10, 16, 7);
+
+        // Disparo visible
+        if (p.shootFlash > 0) {
+          ctx.fillStyle = '#ffd54f';
+          ctx.fillRect(x + p.w + 8, y + p.h * 0.45, 10, 6);
+        }
+
+        // Escudo visible
+        if (p.shieldTime > 0) {
+          ctx.fillStyle = '#7df3ffcc';
+          ctx.strokeStyle = '#00b4d8';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(x + p.w - 1, y + 15, 26, 32, 6);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      function drawEnemy(enemy) {
+        const x = enemy.x - game.cameraX;
+        const y = enemy.y;
+
+        if (x < -100 || x > W + 100) return;
+        ctx.fillStyle = '#00000026';
+        ctx.beginPath();
+        ctx.ellipse(x + enemy.w / 2, groundAt(enemy.x + enemy.w / 2) + 4, 21, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Niño futbolista enemigo (camiseta roja)
+        ctx.fillStyle = '#d42525';
+        ctx.fillRect(x, y + 20, enemy.w, 35);
+        ctx.fillStyle = '#f4c9a1';
+        ctx.beginPath();
+        ctx.arc(x + 16, y + 12, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x + 4, y + 56, 10, 12);
+        ctx.fillRect(x + 22, y + 56, 10, 12);
+      }
+
+      function drawBall(ball) {
+        const x = ball.x - game.cameraX;
+        if (x < -40 || x > W + 40) return;
+
+        ctx.fillStyle = '#fefefe';
+        ctx.beginPath();
+        ctx.arc(x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Marca según altura para feedback visual.
+        ctx.fillStyle = ball.type === 'low' ? '#13a34d' : ball.type === 'mid' ? '#ff9800' : '#2e6cff';
+        ctx.beginPath();
+        ctx.arc(x, ball.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawProjectiles() {
+        for (const p of game.projectiles) {
+          const x = p.x - game.cameraX;
+          ctx.fillStyle = '#ffe082';
+          ctx.fillRect(x, p.y, p.w, p.h);
+          ctx.strokeStyle = '#ffb300';
+          ctx.strokeRect(x, p.y, p.w, p.h);
+        }
+      }
+
+      function drawParticles() {
+        for (const pt of game.particles) {
+          ctx.fillStyle = pt.shield ? '#7df3ff' : '#ffd54f';
+          ctx.fillRect(pt.x - game.cameraX, pt.y, 4, 4);
+        }
+      }
+
+      function drawOverlay() {
+        if (!game.alive) {
+          ctx.fillStyle = '#00000088';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 42px Trebuchet MS';
+          ctx.fillText('¡Golpeado! Reiniciando...', 320, 260);
+          ctx.font = '22px Trebuchet MS';
+          ctx.fillText('Tip: bajo=salta, medio=dispara/escudo, alto=agáchate', 250, 300);
+        }
+      }
+
+      function render() {
+        drawStadiumBackground();
+        drawTerrain();
+
+        for (const enemy of game.enemies) drawEnemy(enemy);
+        for (const ball of game.balls) drawBall(ball);
+        drawProjectiles();
+        drawParticles();
+        drawPlayer();
+        drawOverlay();
+      }
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      document.addEventListener('keydown', keydown, { passive: false });
+      document.addEventListener('keyup', keyup);
+
+      resetGame();
+      requestAnimationFrame(frame);
     </script>
   </body>
 </html>
