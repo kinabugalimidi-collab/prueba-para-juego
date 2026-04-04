@@ -115,6 +115,7 @@
         <span class="panel">Distancia: <span id="distance">0</span> m</span>
         <span class="panel">Estado: <span id="state">idle</span></span>
         <span class="panel">Escudo: <span id="shield">listo</span></span>
+        <span class="panel">Etapa: <span id="stage">1</span></span>
       </div>
 
       <section class="game-area">
@@ -140,6 +141,13 @@
             <p id="byeMessage" style="font-weight:700"></p>
           </div>
         </div>
+
+        <div id="stageOverlay" class="overlay" aria-live="polite">
+          <div class="overlay-card" style="background: linear-gradient(135deg,#ff0080cc,#7928ccee,#2afadfcc);">
+            <h2 id="stageTitle">🎆 ¡Felicitaciones! Pasaste el primer nivel 🎆</h2>
+            <p>Nueva etapa desbloqueada. Preparando camisetas y estadio...</p>
+          </div>
+        </div>
       </section>
 
       <p class="help">
@@ -157,9 +165,12 @@
         distance: document.getElementById('distance'),
         state: document.getElementById('state'),
         shield: document.getElementById('shield'),
+        stage: document.getElementById('stage'),
       };
       const lifeOverlay = document.getElementById('lifeOverlay');
       const gameOverOverlay = document.getElementById('gameOverOverlay');
+      const stageOverlay = document.getElementById('stageOverlay');
+      const stageTitle = document.getElementById('stageTitle');
       const finalScoreEl = document.getElementById('finalScore');
       const byeMessage = document.getElementById('byeMessage');
       const yesBtn = document.getElementById('playAgainYes');
@@ -191,6 +202,18 @@
         lifePauseTimer: 0,
         gameOver: false,
         t: 0,
+        stage: 1,
+        nextStageScore: 5000,
+        stagePauseTimer: 0,
+        stageMessages: [
+          'Titi Galimidi el campeón',
+          'Titi Galimidi domina la cancha',
+          'Titi Galimidi orgullo del estadio',
+          'Con Titi Galimidi siempre se gana',
+          'Titi Galimidi pura magia futbolera',
+        ],
+        playerJersey: '#1f56f5',
+        enemyJersey: '#e53935',
       };
 
       function rand(min, max) { return Math.random() * (max - min) + min; }
@@ -262,8 +285,14 @@
         game.paused = false;
         game.lifePauseTimer = 0;
         game.gameOver = false;
+        game.stage = 1;
+        game.nextStageScore = 5000;
+        game.stagePauseTimer = 0;
+        game.playerJersey = '#1f56f5';
+        game.enemyJersey = '#e53935';
         lifeOverlay.classList.remove('show');
         gameOverOverlay.classList.remove('show');
+        stageOverlay.classList.remove('show');
         byeMessage.textContent = '';
       }
 
@@ -286,7 +315,7 @@
       function makeEnemy() {
         const p = game.player;
         const x = p.x + rand(520, 900);
-        game.enemies.push({ x, y: groundAt(x) - 70, w: 36, h: 70, alive: true });
+        game.enemies.push({ x, y: groundAt(x) - 70, w: 36, h: 70, alive: true, shirt: Math.floor(rand(1, 10)) });
       }
 
       function makeBall(enemy) {
@@ -367,7 +396,25 @@
               lifeOverlay.classList.remove('show');
               respawnAfterLifeLoss();
             }
+          } else if (game.stagePauseTimer > 0) {
+            game.stagePauseTimer -= dt;
+            if (game.stagePauseTimer <= 0) {
+              game.paused = false;
+              stageOverlay.classList.remove('show');
+            }
           }
+          return;
+        }
+
+        if (game.score >= game.nextStageScore) {
+          game.stage += 1;
+          game.nextStageScore += 5000;
+          game.paused = true;
+          game.stagePauseTimer = 5;
+          game.playerJersey = `hsl(${(game.stage * 70) % 360} 82% 52%)`;
+          game.enemyJersey = `hsl(${(game.stage * 70 + 140) % 360} 78% 52%)`;
+          stageTitle.textContent = `🎆 ¡Felicitaciones! Pasaste el nivel ${game.stage - 1} 🎆`;
+          stageOverlay.classList.add('show');
           return;
         }
 
@@ -539,12 +586,33 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
 
+        // Nubes
+        ctx.fillStyle = '#ffffffdd';
+        const cloudShift = (game.t * 12) % (W + 240);
+        const cloudXs = [120, 320, 560, 800, 980];
+        for (const cx0 of cloudXs) {
+          const cx = ((cx0 + cloudShift) % (W + 240)) - 120;
+          const cy = 70 + ((cx0 % 3) * 12);
+          ctx.beginPath();
+          ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+          ctx.arc(cx + 26, cy - 8, 18, 0, Math.PI * 2);
+          ctx.arc(cx + 50, cy, 20, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         ctx.fillStyle = '#dce2ea';
         ctx.fillRect(0, 140, W, 116);
         ctx.fillStyle = '#bcc6d5';
         for (let y = 146; y < 248; y += 18) {
           for (let x = (y % 33) * 0.9; x < W; x += 17) ctx.fillRect(x, y, 8, 6);
         }
+
+        const adMessage = game.stageMessages[(game.stage - 1) % game.stageMessages.length];
+        ctx.fillStyle = '#0f2038';
+        ctx.fillRect(300, 215, 500, 30);
+        ctx.fillStyle = '#f7f76b';
+        ctx.font = 'bold 18px Trebuchet MS';
+        ctx.fillText(adMessage, 320, 236);
 
         ctx.fillStyle = '#2f7c39';
         ctx.fillRect(0, 255, W, H - 255);
@@ -596,7 +664,7 @@
         const bodyY = y + p.h - bodyH - 8;
         const bodyW = p.prone ? p.w + 20 : p.w;
 
-        ctx.fillStyle = '#1f56f5';
+        ctx.fillStyle = game.playerJersey;
         ctx.fillRect(x, bodyY, bodyW, bodyH);
 
         const headY = p.prone ? bodyY - 8 : bodyY - 20;
@@ -604,6 +672,18 @@
         ctx.beginPath();
         ctx.arc(x + 16, headY, 10, 0, Math.PI * 2);
         ctx.fill();
+
+        // Carita visible del jugador
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.arc(x + 12, headY - 2, 1.8, 0, Math.PI * 2);
+        ctx.arc(x + 20, headY - 2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x + 16, headY + 3, 4, 0.15, Math.PI - 0.15);
+        ctx.stroke();
 
         if (!p.prone) {
           ctx.fillStyle = '#1f2a3f';
@@ -628,12 +708,29 @@
       function drawEnemies() {
         for (const e of game.enemies) {
           const x = e.x - game.cameraX;
-          ctx.fillStyle = '#e53935';
+          ctx.fillStyle = game.enemyJersey;
           ctx.fillRect(x, e.y + 20, e.w, 34);
           ctx.fillStyle = '#f5cba7';
           ctx.beginPath();
           ctx.arc(x + e.w / 2, e.y + 12, 10, 0, Math.PI * 2);
           ctx.fill();
+          // Carita del lanzador
+          ctx.fillStyle = '#222';
+          ctx.beginPath();
+          ctx.arc(x + e.w / 2 - 4, e.y + 10, 1.4, 0, Math.PI * 2);
+          ctx.arc(x + e.w / 2 + 4, e.y + 10, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(x + e.w / 2, e.y + 14, 3.6, 0.2, Math.PI - 0.2);
+          ctx.strokeStyle = '#222';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Número de camiseta aleatorio (1-9)
+          ctx.fillStyle = '#fffbe6';
+          ctx.font = 'bold 16px Trebuchet MS';
+          ctx.fillText(String(e.shirt), x + e.w / 2 - 4, e.y + 42);
+
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(x + 4, e.y + 54, 10, 15);
           ctx.fillRect(x + e.w - 14, e.y + 54, 10, 15);
@@ -690,6 +787,7 @@
         hud.distance.textContent = game.distance;
         hud.state.textContent = game.player.state;
         hud.shield.textContent = game.player.shieldTime > 0 ? 'activo' : game.player.shieldCd > 0 ? `recarga ${game.player.shieldCd.toFixed(1)}s` : 'listo';
+        hud.stage.textContent = game.stage;
       }
 
       function loop(ts) {
