@@ -48,4 +48,5 @@ Para usar tu foto local (`C:\Users\alejandro.galimidi\Downloads\WhatsApp Image t
 - El intervalo inicial entre lanzamientos es de **2 segundos**.
 - Si sobrevives sin perder vidas, por cada minuto el ritmo aumenta un **10%**.
 - El intervalo mínimo está limitado a **1 segundo** (nunca baja de eso).
-- Después del primer minuto, puede aparecer un segundo balón aleatorio, con separación suficiente para que sea esquivable/destruible.
+- Durante el primer minuto hay un máximo de 1 balón activo en pantalla.
+- Después del primer minuto, puede aparecer un segundo balón aleatorio, con separación suficiente para que sea esquivable/destruible (nunca lluvia simultánea injusta).
