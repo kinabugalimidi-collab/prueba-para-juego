@@ -41,3 +41,10 @@ Para usar tu foto local (`C:\Users\alejandro.galimidi\Downloads\WhatsApp Image t
 
 1. Copia esa imagen dentro del repo en `assets/titiman.jpeg`.
 2. Abre `index.html` y el overlay de pérdida de vida mostrará esa foto durante 5 segundos.
+
+## Ritmo de lanzamiento de balones
+
+- El intervalo inicial entre lanzamientos es de **2 segundos**.
+- Si sobrevives sin perder vidas, por cada minuto el ritmo aumenta un **10%**.
+- El intervalo mínimo está limitado a **1 segundo** (nunca baja de eso).
+- Después del primer minuto, puede aparecer un segundo balón aleatorio, con separación suficiente para que sea esquivable/destruible.
