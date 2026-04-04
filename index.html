@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Titi Galimidi Futbol</title>
+    <style>
+      :root {
+        font-family: 'Trebuchet MS', Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(#97d0ff, #d9f0ff);
+        display: grid;
+        place-items: center;
+      }
+      .wrap {
+        width: min(96vw, 1120px);
+      }
+      h1 {
+        margin: 0 0 0.6rem;
+        color: #0f335c;
+        font-size: clamp(1.2rem, 3vw, 2.1rem);
+      }
+      .hud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 0.65rem;
+        font-weight: 700;
+      }
+      .panel {
+        background: #ffffffd9;
+        padding: 0.35rem 0.7rem;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px #00000020;
+      }
+      .game-area {
+        position: relative;
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 14px;
+        border: 2px solid #235b23;
+        box-shadow: 0 12px 24px #00000030;
+        background: #7bc6ff;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 14px;
+        color: white;
+        text-align: center;
+        padding: 1rem;
+      }
+      .overlay.show {
+        display: flex;
+      }
+      .overlay-card {
+        max-width: min(90%, 500px);
+        background: #0d1f36f0;
+        border: 2px solid #ffffff55;
+        border-radius: 14px;
+        padding: 1rem;
+      }
+      .overlay-card img {
+        width: min(90%, 260px);
+        border-radius: 12px;
+        border: 2px solid #ffffff66;
+        margin-bottom: 0.8rem;
+        background: #1f2937;
+      }
+      .gameover-actions button {
+        border: none;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 700;
+        padding: 0.5rem 1rem;
+        margin: 0.3rem;
+        cursor: pointer;
+      }
+      .yes {
+        background: #32d662;
+      }
+      .no {
+        background: #ff7f7f;
+      }
+      .help {
+        margin-top: 0.55rem;
+        background: #ffffffcc;
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
+        color: #0f335c;
+      }
+      code {
+        background: #e7f2ff;
+        padding: 0.05rem 0.25rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Titi Galimidi Futbol ⚽</h1>
+      <div class="hud">
+        <span class="panel">Puntos: <span id="score">0</span></span>
+        <span class="panel">Vidas: <span id="lives">3</span></span>
+        <span class="panel">Distancia: <span id="distance">0</span> m</span>
+        <span class="panel">Estado: <span id="state">idle</span></span>
+        <span class="panel">Escudo: <span id="shield">listo</span></span>
+      </div>
+
+      <section class="game-area">
+        <canvas id="game" width="1100" height="560"></canvas>
+
+        <div id="lifeOverlay" class="overlay" aria-live="polite">
+          <div class="overlay-card">
+            <img id="motivationImage" alt="Titi Galimidi" src="assets/titiman.jpeg" />
+            <h2>¡Vamos Titi Galimidi, tú puedes!</h2>
+            <p>Respira... en segundos vuelves al partido.</p>
+          </div>
+        </div>
+
+        <div id="gameOverOverlay" class="overlay" aria-live="polite">
+          <div class="overlay-card">
+            <h2>Game Over</h2>
+            <p>Puntuación final: <strong id="finalScore">0</strong></p>
+            <p>¿Quieres jugar otra partida?</p>
+            <div class="gameover-actions">
+              <button class="yes" id="playAgainYes">Sí</button>
+              <button class="no" id="playAgainNo">No</button>
+            </div>
+            <p id="byeMessage" style="font-weight:700"></p>
+          </div>
+        </div>
+      </section>
+
+      <p class="help">
+        Controles: <code>→</code> correr, <code>↑</code> saltar, <code>↓</code> agacharse,
+        <code>←</code> acostarse, <code>A</code> disparar, <code>S</code> escudo, <code>D</code> reservado.
+      </p>
+    </main>
+
+    <script>
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const hud = {
+        score: document.getElementById('score'),
+        lives: document.getElementById('lives'),
+        distance: document.getElementById('distance'),
+        state: document.getElementById('state'),
+        shield: document.getElementById('shield'),
+      };
+      const lifeOverlay = document.getElementById('lifeOverlay');
+      const gameOverOverlay = document.getElementById('gameOverOverlay');
+      const finalScoreEl = document.getElementById('finalScore');
+      const byeMessage = document.getElementById('byeMessage');
+      const yesBtn = document.getElementById('playAgainYes');
+      const noBtn = document.getElementById('playAgainNo');
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const GRAVITY = 1400;
+      const MAX_SLOPE = Math.tan((30 * Math.PI) / 180);
+      const SEGMENT = 180;
+      const keys = new Set();
+
+      const game = {
+        terrain: [],
+        player: null,
+        enemies: [],
+        balls: [],
+        projectiles: [],
+        particles: [],
+        cameraX: 0,
+        distance: 0,
+        score: 0,
+        lives: 3,
+        enemyTimer: 0,
+        ballTimer: 2,
+        queuedShots: [],
+        survivalTime: 0,
+        paused: false,
+        lifePauseTimer: 0,
+        gameOver: false,
+        t: 0,
+      };
+
+      function rand(min, max) { return Math.random() * (max - min) + min; }
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+      function setupTerrain() {
+        game.terrain = [{ x: -300, y: 450 }];
+        for (let i = 1; i < 80; i += 1) {
+          const prev = game.terrain[i - 1];
+          const maxDY = SEGMENT * MAX_SLOPE;
+          const y = clamp(prev.y + rand(-maxDY * 0.9, maxDY * 0.9), 350, 500);
+          game.terrain.push({ x: prev.x + SEGMENT, y });
+        }
+      }
+
+      function ensureTerrainAhead(targetX) {
+        while (game.terrain[game.terrain.length - 1].x < targetX) {
+          const prev = game.terrain[game.terrain.length - 1];
+          const maxDY = SEGMENT * MAX_SLOPE;
+          game.terrain.push({
+            x: prev.x + SEGMENT,
+            y: clamp(prev.y + rand(-maxDY * 0.9, maxDY * 0.9), 350, 500),
+          });
+        }
+      }
+
+      function groundAt(x) {
+        ensureTerrainAhead(x + 1000);
+        for (let i = 0; i < game.terrain.length - 1; i += 1) {
+          const a = game.terrain[i];
+          const b = game.terrain[i + 1];
+          if (x >= a.x && x <= b.x) {
+            const t = (x - a.x) / (b.x - a.x);
+            return a.y + (b.y - a.y) * t;
+          }
+        }
+        return 460;
+      }
+
+      function fullReset() {
+        setupTerrain();
+        game.player = {
+          x: 100,
+          y: groundAt(100) - 68,
+          w: 38,
+          h: 68,
+          vx: 0,
+          vy: 0,
+          onGround: true,
+          crouching: false,
+          prone: false,
+          shieldTime: 0,
+          shieldCd: 0,
+          shootFlash: 0,
+          state: 'idle',
+        };
+        game.enemies = [];
+        game.balls = [];
+        game.projectiles = [];
+        game.particles = [];
+        game.cameraX = 0;
+        game.distance = 0;
+        game.score = 0;
+        game.lives = 3;
+        game.enemyTimer = rand(0.7, 1.6);
+        game.ballTimer = 2;
+        game.queuedShots = [];
+        game.survivalTime = 0;
+        game.paused = false;
+        game.lifePauseTimer = 0;
+        game.gameOver = false;
+        lifeOverlay.classList.remove('show');
+        gameOverOverlay.classList.remove('show');
+        byeMessage.textContent = '';
+      }
+
+      function respawnAfterLifeLoss() {
+        const p = game.player;
+        p.x = Math.max(100, p.x - 140);
+        p.y = groundAt(p.x) - p.h;
+        p.vx = 0;
+        p.vy = 0;
+        p.onGround = true;
+        p.prone = false;
+        p.crouching = false;
+        p.shieldTime = 0;
+        p.state = 'idle';
+        game.balls = [];
+        game.projectiles = [];
+        game.enemies = game.enemies.filter((e) => e.x > p.x - 150 && e.x < p.x + 1200);
+      }
+
+      function makeEnemy() {
+        const p = game.player;
+        const x = p.x + rand(520, 900);
+        game.enemies.push({ x, y: groundAt(x) - 70, w: 36, h: 70, alive: true });
+      }
+
+      function makeBall(enemy) {
+        const type = Math.random() < 0.34 ? 'low' : Math.random() < 0.5 ? 'mid' : 'high';
+        const yOffset = type === 'low' ? 60 : type === 'mid' ? 38 : 12;
+        game.balls.push({ x: enemy.x + 8, y: groundAt(enemy.x) - yOffset, r: 12, vx: -rand(320, 430), type, alive: true });
+      }
+
+      function shoot() {
+        if (game.paused || game.gameOver) return;
+        const p = game.player;
+        p.shootFlash = 0.16;
+        game.projectiles.push({ x: p.x + p.w + 6, y: p.y + p.h * 0.48, w: 24, h: 7, vx: 560 });
+      }
+
+      function activateShield() {
+        const p = game.player;
+        if (game.paused || game.gameOver) return;
+        if (p.shieldCd > 0 || p.shieldTime > 0) return;
+        p.shieldTime = 0.45;
+        p.shieldCd = 1.3;
+      }
+
+      function bodyRect(p) {
+        if (p.prone) return { x: p.x - 2, y: p.y + p.h - 18, w: p.w + 24, h: 18 };
+        if (p.crouching) return { x: p.x, y: p.y + 24, w: p.w, h: p.h - 24 };
+        return { x: p.x, y: p.y, w: p.w, h: p.h };
+      }
+
+      function circleRectCollide(cx, cy, r, rect) {
+        const nx = clamp(cx, rect.x, rect.x + rect.w);
+        const ny = clamp(cy, rect.y, rect.y + rect.h);
+        const dx = cx - nx;
+        const dy = cy - ny;
+        return dx * dx + dy * dy <= r * r;
+      }
+
+      function rectCollide(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function addExplosion(x, y, count = 14, shield = false) {
+        for (let i = 0; i < count; i += 1) {
+          game.particles.push({ x, y, vx: rand(-180, 180), vy: rand(-220, 90), t: rand(0.35, 0.7), shield });
+        }
+      }
+
+      function loseLife() {
+        if (game.paused || game.gameOver) return;
+        game.lives -= 1;
+        if (game.lives <= 0) {
+          game.lives = 0;
+          game.gameOver = true;
+          game.paused = true;
+          finalScoreEl.textContent = game.score;
+          gameOverOverlay.classList.add('show');
+          return;
+        }
+        game.paused = true;
+        game.lifePauseTimer = 5;
+        game.survivalTime = 0;
+        game.ballTimer = 2;
+        game.queuedShots = [];
+        lifeOverlay.classList.add('show');
+      }
+
+      function update(dt) {
+        const p = game.player;
+        game.t += dt;
+
+        if (game.gameOver) return;
+
+        if (game.paused) {
+          if (game.lifePauseTimer > 0) {
+            game.lifePauseTimer -= dt;
+            if (game.lifePauseTimer <= 0) {
+              game.paused = false;
+              lifeOverlay.classList.remove('show');
+              respawnAfterLifeLoss();
+            }
+          }
+          return;
+        }
+
+        p.crouching = keys.has('arrowdown');
+        p.prone = keys.has('arrowleft');
+
+        if (keys.has('arrowup') && p.onGround && !p.crouching && !p.prone) {
+          p.vy = -560;
+          p.onGround = false;
+        }
+
+        p.vx = keys.has('arrowright') && !p.prone ? 240 : 85;
+
+        p.shieldTime = Math.max(0, p.shieldTime - dt);
+        p.shieldCd = Math.max(0, p.shieldCd - dt);
+        p.shootFlash = Math.max(0, p.shootFlash - dt);
+
+        p.vy += GRAVITY * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        const g = groundAt(p.x + p.w * 0.45);
+        if (p.y + p.h >= g) {
+          p.y = g - p.h;
+          p.vy = 0;
+          p.onGround = true;
+        } else {
+          p.onGround = false;
+        }
+
+        game.cameraX = p.x - 180;
+        game.distance = Math.max(0, Math.floor((p.x - 100) / 8));
+
+        game.enemyTimer -= dt;
+        if (game.enemyTimer <= 0) {
+          makeEnemy();
+          game.enemyTimer = rand(1.05, 1.9);
+        }
+
+        for (const enemy of game.enemies) {
+          enemy.y = groundAt(enemy.x) - enemy.h;
+        }
+
+        game.survivalTime += dt;
+        const minutesAlive = Math.floor(game.survivalTime / 60);
+        const speedFactor = Math.pow(1.1, minutesAlive);
+        const minInterval = 1;
+        const shotInterval = Math.max(minInterval, 2 / speedFactor);
+
+        for (const q of game.queuedShots) q.delay -= dt;
+        const readyShots = game.queuedShots.filter((q) => q.delay <= 0);
+        game.queuedShots = game.queuedShots.filter((q) => q.delay > 0);
+        for (const q of readyShots) {
+          if (q.enemy.alive) makeBall(q.enemy);
+        }
+
+        game.ballTimer -= dt;
+        if (game.ballTimer <= 0) {
+          const throwers = game.enemies.filter((e) => e.alive && e.x > p.x + 120 && e.x < p.x + 1050);
+          const maxActiveBalls = game.survivalTime < 60 ? 1 : 2;
+          const ballsInFlight = game.balls.filter((b) => b.alive).length;
+
+          if (throwers.length > 0 && ballsInFlight < maxActiveBalls) {
+            const enemy = throwers[Math.floor(Math.random() * throwers.length)];
+            makeBall(enemy);
+
+            const totalPending = game.balls.filter((b) => b.alive).length + game.queuedShots.length;
+            if (game.survivalTime >= 60 && Math.random() < 0.28 && totalPending < 2) {
+              // Segundo balón separado para mantener ventana real de reacción.
+              game.queuedShots.push({ enemy, delay: rand(1.0, 1.4) });
+            }
+          }
+          game.ballTimer = shotInterval;
+        }
+
+        for (const ball of game.balls) {
+          ball.x += ball.vx * dt;
+          const base = groundAt(ball.x);
+          const yOffset = ball.type === 'low' ? 12 : ball.type === 'mid' ? 44 : 88;
+          ball.y = base - yOffset;
+        }
+
+        for (const pr of game.projectiles) pr.x += pr.vx * dt;
+
+        const pRect = bodyRect(p);
+        const shieldRect = { x: p.x + p.w - 1, y: p.y + 14, w: 28, h: 38 };
+
+        // proyectil contra balón medio o enemigo
+        for (const pr of game.projectiles) {
+          for (const ball of game.balls) {
+            if (!ball.alive || ball.type !== 'mid') continue;
+            if (pr.x < ball.x + ball.r && pr.x + pr.w > ball.x - ball.r && pr.y < ball.y + ball.r && pr.y + pr.h > ball.y - ball.r) {
+              ball.alive = false;
+              pr.x = 999999;
+              game.score += 200;
+              addExplosion(ball.x, ball.y, 10);
+            }
+          }
+          for (const enemy of game.enemies) {
+            if (!enemy.alive) continue;
+            if (rectCollide({ x: pr.x, y: pr.y, w: pr.w, h: pr.h }, { x: enemy.x, y: enemy.y, w: enemy.w, h: enemy.h })) {
+              enemy.alive = false;
+              pr.x = 999999;
+              game.score += 100;
+              addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 20);
+            }
+          }
+        }
+
+        for (const ball of game.balls) {
+          if (!ball.alive) continue;
+
+          if (p.shieldTime > 0 && ball.type === 'mid' && circleRectCollide(ball.x, ball.y, ball.r, shieldRect)) {
+            ball.alive = false;
+            game.score += 200;
+            addExplosion(ball.x, ball.y, 8, true);
+            continue;
+          }
+
+          if (circleRectCollide(ball.x, ball.y, ball.r, pRect)) {
+            const safeLow = ball.type === 'low' && !p.onGround;
+            const safeHigh = ball.type === 'high' && (p.crouching || p.prone);
+            if (!(safeLow || safeHigh)) loseLife();
+          }
+        }
+
+        // escudo/proximidad contra enemigos, y contacto enemigo con jugador
+        for (const enemy of game.enemies) {
+          if (!enemy.alive) continue;
+          const eRect = { x: enemy.x, y: enemy.y, w: enemy.w, h: enemy.h };
+
+          if (p.shieldTime > 0 && rectCollide(shieldRect, eRect)) {
+            enemy.alive = false;
+            game.score += 100;
+            addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 18, true);
+            continue;
+          }
+
+          if (rectCollide(pRect, eRect)) {
+            loseLife();
+          }
+        }
+
+        game.enemies = game.enemies.filter((e) => e.alive && e.x > p.x - 500 && e.x < p.x + 1500);
+        game.balls = game.balls.filter((b) => b.alive && b.x > p.x - 500 && b.x < p.x + 950);
+        game.projectiles = game.projectiles.filter((pr) => pr.x < p.x + 1400);
+
+        for (const pt of game.particles) {
+          pt.t -= dt;
+          pt.x += pt.vx * dt;
+          pt.y += pt.vy * dt;
+          pt.vy += 460 * dt;
+        }
+        game.particles = game.particles.filter((pt) => pt.t > 0);
+
+        if (p.shieldTime > 0) p.state = 'shield';
+        else if (p.shootFlash > 0) p.state = 'shoot';
+        else if (p.prone) p.state = 'prone';
+        else if (p.crouching) p.state = 'crouch';
+        else if (!p.onGround) p.state = 'jump';
+        else if (keys.has('arrowright')) p.state = 'run';
+        else p.state = 'idle';
+      }
+
+      function drawBackground() {
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#7ecbff');
+        grad.addColorStop(1, '#d8f4ff');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = '#dce2ea';
+        ctx.fillRect(0, 140, W, 116);
+        ctx.fillStyle = '#bcc6d5';
+        for (let y = 146; y < 248; y += 18) {
+          for (let x = (y % 33) * 0.9; x < W; x += 17) ctx.fillRect(x, y, 8, 6);
+        }
+
+        ctx.fillStyle = '#2f7c39';
+        ctx.fillRect(0, 255, W, H - 255);
+        ctx.fillStyle = '#40984b';
+        for (let i = 0; i < 15; i += 1) ctx.fillRect(i * 78 + ((game.cameraX * 0.2) % 78), 255, 38, H - 255);
+      }
+
+      function drawTerrain() {
+        ctx.beginPath();
+        for (let i = 0; i < game.terrain.length; i += 1) {
+          const p = game.terrain[i];
+          const sx = p.x - game.cameraX;
+          if (i === 0) ctx.moveTo(sx, p.y);
+          else ctx.lineTo(sx, p.y);
+        }
+        ctx.lineTo(W + 100, H + 80);
+        ctx.lineTo(-100, H + 80);
+        ctx.closePath();
+
+        const grad = ctx.createLinearGradient(0, 320, 0, H);
+        grad.addColorStop(0, '#b19a67');
+        grad.addColorStop(1, '#8b7348');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.strokeStyle = '#f8e38e';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        for (let i = 0; i < game.terrain.length; i += 1) {
+          const p = game.terrain[i];
+          const sx = p.x - game.cameraX;
+          if (i === 0) ctx.moveTo(sx, p.y - 1);
+          else ctx.lineTo(sx, p.y - 1);
+        }
+        ctx.stroke();
+      }
+
+      function drawPlayer() {
+        const p = game.player;
+        const x = p.x - game.cameraX;
+        const y = p.y;
+
+        ctx.fillStyle = '#00000030';
+        ctx.beginPath();
+        ctx.ellipse(x + p.w / 2, groundAt(p.x + p.w / 2) + 4, 24, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bodyH = p.prone ? 18 : p.crouching ? 34 : 42;
+        const bodyY = y + p.h - bodyH - 8;
+        const bodyW = p.prone ? p.w + 20 : p.w;
+
+        ctx.fillStyle = '#1f56f5';
+        ctx.fillRect(x, bodyY, bodyW, bodyH);
+
+        const headY = p.prone ? bodyY - 8 : bodyY - 20;
+        ctx.fillStyle = '#f4c9a1';
+        ctx.beginPath();
+        ctx.arc(x + 16, headY, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (!p.prone) {
+          ctx.fillStyle = '#1f2a3f';
+          const swing = p.state === 'run' ? Math.sin(game.t * 16) * 6 : 0;
+          ctx.fillRect(x + 4, y + p.h - 8, 8, 9 + Math.abs(swing));
+          ctx.fillRect(x + p.w - 12, y + p.h - 8, 8, 9 + Math.abs(swing));
+        }
+
+        if (p.shootFlash > 0) {
+          ctx.fillStyle = '#ffef95';
+          ctx.fillRect(x + bodyW + 2, y + p.h * 0.48, 10, 5);
+        }
+
+        if (p.shieldTime > 0) {
+          ctx.fillStyle = '#7dd3ffcc';
+          ctx.fillRect(x + p.w - 2, y + 16, 26, 34);
+          ctx.strokeStyle = '#dff5ff';
+          ctx.strokeRect(x + p.w - 2, y + 16, 26, 34);
+        }
+      }
+
+      function drawEnemies() {
+        for (const e of game.enemies) {
+          const x = e.x - game.cameraX;
+          ctx.fillStyle = '#e53935';
+          ctx.fillRect(x, e.y + 20, e.w, 34);
+          ctx.fillStyle = '#f5cba7';
+          ctx.beginPath();
+          ctx.arc(x + e.w / 2, e.y + 12, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x + 4, e.y + 54, 10, 15);
+          ctx.fillRect(x + e.w - 14, e.y + 54, 10, 15);
+        }
+      }
+
+      function drawBalls() {
+        for (const b of game.balls) {
+          const x = b.x - game.cameraX;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#111';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.fillStyle = '#111';
+          ctx.fillRect(x - 2, b.y - 2, 4, 4);
+        }
+      }
+
+      function drawProjectiles() {
+        for (const pr of game.projectiles) {
+          const x = pr.x - game.cameraX;
+          ctx.fillStyle = '#ffc93c';
+          ctx.fillRect(x, pr.y, pr.w, pr.h);
+          ctx.strokeStyle = '#7d4c00';
+          ctx.strokeRect(x, pr.y, pr.w, pr.h);
+        }
+      }
+
+      function drawParticles() {
+        for (const pt of game.particles) {
+          ctx.globalAlpha = Math.max(0, pt.t * 1.7);
+          ctx.fillStyle = pt.shield ? '#8de4ff' : '#ff9654';
+          ctx.fillRect(pt.x - game.cameraX, pt.y, 4, 4);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function draw() {
+        drawBackground();
+        drawTerrain();
+        drawEnemies();
+        drawBalls();
+        drawProjectiles();
+        drawParticles();
+        drawPlayer();
+      }
+
+      function syncHud() {
+        hud.score.textContent = game.score;
+        hud.lives.textContent = game.lives;
+        hud.distance.textContent = game.distance;
+        hud.state.textContent = game.player.state;
+        hud.shield.textContent = game.player.shieldTime > 0 ? 'activo' : game.player.shieldCd > 0 ? `recarga ${game.player.shieldCd.toFixed(1)}s` : 'listo';
+      }
+
+      function loop(ts) {
+        if (!loop.prev) loop.prev = ts;
+        const dt = Math.min(0.033, (ts - loop.prev) / 1000);
+        loop.prev = ts;
+
+        update(dt);
+        draw();
+        syncHud();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'a', 's', 'd', ' '].includes(k)) e.preventDefault();
+        if (k === 'a') shoot();
+        if (k === 's') activateShield();
+        keys.add(k);
+      });
+
+      window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+
+      yesBtn.addEventListener('click', () => {
+        fullReset();
+      });
+
+      noBtn.addEventListener('click', () => {
+        byeMessage.textContent = 'Bye Bye';
+      });
+
+      fullReset();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
