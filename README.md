@@ -50,3 +50,16 @@ Para usar tu foto local (`C:\Users\alejandro.galimidi\Downloads\WhatsApp Image t
 - El intervalo mínimo está limitado a **1 segundo** (nunca baja de eso).
 - Durante el primer minuto hay un máximo de 1 balón activo en pantalla.
 - Después del primer minuto, puede aparecer un segundo balón aleatorio, con separación suficiente para que sea esquivable/destruible (nunca lluvia simultánea injusta).
+
+
+## Etapas y nivel cada 5000 puntos
+
+- Al llegar a cada múltiplo de **5000 puntos**, el juego se pausa 5 segundos con aviso multicolor de felicitación.
+- Al volver, cambia el color de camiseta del jugador y de los lanzadores.
+- En las graderías aparece un cartel publicitario con mensajes sobre Titi que cambian por etapa.
+
+## Detalles visuales nuevos
+
+- La cabeza del jugador y de los lanzadores incluye una carita visible.
+- Los lanzadores muestran número de camiseta aleatorio entre **1 y 9**.
+- El cielo ahora incluye nubes animadas.
