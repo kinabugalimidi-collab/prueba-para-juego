@@ -92,6 +92,46 @@
       .no {
         background: #ff7f7f;
       }
+
+      .touch-controls {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .touch-pad {
+        position: absolute;
+        bottom: 14px;
+        display: grid;
+        gap: 8px;
+        pointer-events: auto;
+      }
+      .touch-left {
+        left: 14px;
+        grid-template-columns: repeat(2, 62px);
+      }
+      .touch-right {
+        right: 14px;
+        grid-template-columns: repeat(3, 58px);
+        grid-template-rows: repeat(3, 52px);
+      }
+      .tbtn {
+        border: 0;
+        border-radius: 12px;
+        font-weight: 800;
+        background: #ffffffd9;
+        color: #12243b;
+        box-shadow: 0 4px 12px #0000002d;
+        touch-action: none;
+        user-select: none;
+      }
+      .tbtn:active { transform: scale(0.97); }
+      .shoot-btn { background: #ffd36a; }
+      .shield-btn { background: #8fd9ff; }
+      .move-up { grid-column: 2; grid-row: 1; }
+      .move-left { grid-column: 1; grid-row: 2; }
+      .move-right { grid-column: 3; grid-row: 2; }
+      .move-down { grid-column: 2; grid-row: 3; }
+
       .help {
         margin-top: 0.55rem;
         background: #ffffffcc;
@@ -116,6 +156,7 @@
         <span class="panel">Estado: <span id="state">idle</span></span>
         <span class="panel">Escudo: <span id="shield">listo</span></span>
         <span class="panel">Etapa: <span id="stage">1</span></span>
+        <button class="panel tbtn" id="audioToggle" style="padding:0.35rem 0.7rem">🔊 Audio</button>
       </div>
 
       <section class="game-area">
@@ -148,6 +189,21 @@
             <p>Nueva etapa desbloqueada. Preparando camisetas y estadio...</p>
           </div>
         </div>
+
+
+        <div class="touch-controls" aria-label="Controles táctiles">
+          <div class="touch-pad touch-left">
+            <button class="tbtn shoot-btn" data-action="shoot">Disparo</button>
+            <button class="tbtn shield-btn" data-action="shield">Escudo</button>
+          </div>
+          <div class="touch-pad touch-right">
+            <button class="tbtn move-up" data-key="arrowup">↑</button>
+            <button class="tbtn move-left" data-key="arrowleft">←</button>
+            <button class="tbtn move-right" data-key="arrowright">→</button>
+            <button class="tbtn move-down" data-key="arrowdown">↓</button>
+          </div>
+        </div>
+
       </section>
 
       <p class="help">
@@ -175,6 +231,10 @@
       const byeMessage = document.getElementById('byeMessage');
       const yesBtn = document.getElementById('playAgainYes');
       const noBtn = document.getElementById('playAgainNo');
+      const audioToggle = document.getElementById('audioToggle');
+
+      let audioCtx = null;
+      let audioEnabled = true;
 
       const W = canvas.width;
       const H = canvas.height;
@@ -218,6 +278,52 @@
 
       function rand(min, max) { return Math.random() * (max - min) + min; }
       function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+
+
+      function ensureAudio() {
+        if (!audioEnabled) return null;
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          audioCtx = new AC();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+      }
+
+      function playTone(freq = 440, duration = 0.12, type = 'sine', volume = 0.03, slideTo = null) {
+        const ctxA = ensureAudio();
+        if (!ctxA) return;
+        const now = ctxA.currentTime;
+        const osc = ctxA.createOscillator();
+        const gain = ctxA.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (slideTo) osc.frequency.linearRampToValueAtTime(slideTo, now + duration);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain);
+        gain.connect(ctxA.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      function sfx(name) {
+        if (!audioEnabled) return;
+        if (name === 'shoot') playTone(780, 0.07, 'square', 0.02, 560);
+        else if (name === 'shield') playTone(420, 0.12, 'triangle', 0.03, 680);
+        else if (name === 'hit') {
+          playTone(210, 0.1, 'sawtooth', 0.03, 90);
+          playTone(130, 0.12, 'triangle', 0.02, 70);
+        } else if (name === 'lose') playTone(180, 0.2, 'sawtooth', 0.04, 70);
+        else if (name === 'stage') {
+          playTone(523, 0.12, 'triangle', 0.03);
+          setTimeout(() => playTone(659, 0.12, 'triangle', 0.03), 110);
+          setTimeout(() => playTone(784, 0.18, 'triangle', 0.03), 220);
+        }
+      }
 
       function setupTerrain() {
         game.terrain = [{ x: -300, y: 450 }];
@@ -329,6 +435,7 @@
         const p = game.player;
         p.shootFlash = 0.16;
         game.projectiles.push({ x: p.x + p.w + 6, y: p.y + p.h * 0.48, w: 24, h: 7, vx: 560 });
+        sfx('shoot');
       }
 
       function activateShield() {
@@ -337,6 +444,7 @@
         if (p.shieldCd > 0 || p.shieldTime > 0) return;
         p.shieldTime = 0.45;
         p.shieldCd = 1.3;
+        sfx('shield');
       }
 
       function bodyRect(p) {
@@ -366,6 +474,7 @@
       function loseLife() {
         if (game.paused || game.gameOver) return;
         game.lives -= 1;
+        sfx('lose');
         if (game.lives <= 0) {
           game.lives = 0;
           game.gameOver = true;
@@ -415,6 +524,7 @@
           game.enemyJersey = `hsl(${(game.stage * 70 + 140) % 360} 78% 52%)`;
           stageTitle.textContent = `🎆 ¡Felicitaciones! Pasaste el nivel ${game.stage - 1} 🎆`;
           stageOverlay.classList.add('show');
+          sfx('stage');
           return;
         }
 
@@ -511,6 +621,7 @@
               pr.x = 999999;
               game.score += 200;
               addExplosion(ball.x, ball.y, 10);
+              sfx('hit');
             }
           }
           for (const enemy of game.enemies) {
@@ -520,6 +631,7 @@
               pr.x = 999999;
               game.score += 100;
               addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 20);
+              sfx('hit');
             }
           }
         }
@@ -531,6 +643,7 @@
             ball.alive = false;
             game.score += 200;
             addExplosion(ball.x, ball.y, 8, true);
+            sfx('hit');
             continue;
           }
 
@@ -550,6 +663,7 @@
             enemy.alive = false;
             game.score += 100;
             addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 18, true);
+            sfx('hit');
             continue;
           }
 
@@ -802,6 +916,7 @@
       }
 
       window.addEventListener('keydown', (e) => {
+        ensureAudio();
         const k = e.key.toLowerCase();
         if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'a', 's', 'd', ' '].includes(k)) e.preventDefault();
         if (k === 'a') shoot();
@@ -811,6 +926,33 @@
 
       window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
+
+      function bindTouchControls() {
+        const keyButtons = document.querySelectorAll('[data-key]');
+        const actionButtons = document.querySelectorAll('[data-action]');
+
+        const pressKey = (k) => keys.add(k);
+        const releaseKey = (k) => keys.delete(k);
+
+        keyButtons.forEach((btn) => {
+          const key = btn.getAttribute('data-key');
+          btn.addEventListener('pointerdown', (e) => { e.preventDefault(); ensureAudio(); pressKey(key); });
+          btn.addEventListener('pointerup', (e) => { e.preventDefault(); releaseKey(key); });
+          btn.addEventListener('pointerleave', () => releaseKey(key));
+          btn.addEventListener('pointercancel', () => releaseKey(key));
+        });
+
+        actionButtons.forEach((btn) => {
+          const action = btn.getAttribute('data-action');
+          btn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            ensureAudio();
+            if (action === 'shoot') shoot();
+            if (action === 'shield') activateShield();
+          });
+        });
+      }
+
       yesBtn.addEventListener('click', () => {
         fullReset();
       });
@@ -819,8 +961,16 @@
         byeMessage.textContent = 'Bye Bye';
       });
 
+      audioToggle.addEventListener('click', () => {
+        audioEnabled = !audioEnabled;
+        audioToggle.textContent = audioEnabled ? '🔊 Audio' : '🔈 Audio';
+        if (audioEnabled) ensureAudio();
+      });
+
+      bindTouchControls();
       fullReset();
       requestAnimationFrame(loop);
     </script>
   </body>
 </html>
+
