@@ -1,18 +1,26 @@
 # prueba-para-juego
+Mi primer repositorio
 
-Juego súper simple en **HTML + JavaScript**:
+Juego 2D lateral en **HTML + CSS + JavaScript puro**, ejecutable directamente en navegador.
 
-- Nombre: **Atrapa el cuadro**
-- Objetivo: hacer la mayor cantidad de clics al cuadro rojo en 20 segundos.
+## Cómo jugar
 
-## Cómo ejecutarlo
+1. Abre `index.html` en tu navegador.
+2. Usa estos controles:
+   - `→`: correr / avanzar
+   - `↑`: saltar
+   - `↓`: agacharse
+   - `←`: acostarse
+   - `A`: disparar proyectil
+   - `S`: activar escudo
+   - `D`: reservado (sin función por ahora)
+3. Sobrevive esquivando o bloqueando balones enemigos.
+4. Si te golpean, el juego se reinicia automáticamente.
 
-1. Abre el archivo `index.html` en tu navegador.
-2. Presiona **Iniciar**.
-3. ¡Haz clic al cuadro rojo para sumar puntos!
+## Mecánicas clave
 
-## Tecnologías
-
-- HTML5
-- CSS3
-- JavaScript (vanilla)
+- Terreno procedural con pendientes aleatorias (máximo ±30°).
+- Fondo estilo estadio de fútbol.
+- Enemigos aleatorios que lanzan balones bajos, medios o altos.
+- Estados visuales del jugador: correr, saltar, agacharse, acostarse, disparar, escudo y morir.
+- Marcador de distancia recorrida y número de ronda.
