@@ -427,12 +427,17 @@
         game.ballTimer -= dt;
         if (game.ballTimer <= 0) {
           const throwers = game.enemies.filter((e) => e.alive && e.x > p.x + 120 && e.x < p.x + 1050);
-          if (throwers.length > 0) {
+          const maxActiveBalls = game.survivalTime < 60 ? 1 : 2;
+          const ballsInFlight = game.balls.filter((b) => b.alive).length;
+
+          if (throwers.length > 0 && ballsInFlight < maxActiveBalls) {
             const enemy = throwers[Math.floor(Math.random() * throwers.length)];
             makeBall(enemy);
 
-            if (game.survivalTime >= 60 && Math.random() < 0.35) {
-              game.queuedShots.push({ enemy, delay: rand(0.55, 0.95) });
+            const totalPending = game.balls.filter((b) => b.alive).length + game.queuedShots.length;
+            if (game.survivalTime >= 60 && Math.random() < 0.28 && totalPending < 2) {
+              // Segundo balón separado para mantener ventana real de reacción.
+              game.queuedShots.push({ enemy, delay: rand(1.0, 1.4) });
             }
           }
           game.ballTimer = shotInterval;
