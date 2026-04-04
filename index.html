@@ -184,6 +184,9 @@
         score: 0,
         lives: 3,
         enemyTimer: 0,
+        ballTimer: 2,
+        queuedShots: [],
+        survivalTime: 0,
         paused: false,
         lifePauseTimer: 0,
         gameOver: false,
@@ -253,6 +256,9 @@
         game.score = 0;
         game.lives = 3;
         game.enemyTimer = rand(0.7, 1.6);
+        game.ballTimer = 2;
+        game.queuedShots = [];
+        game.survivalTime = 0;
         game.paused = false;
         game.lifePauseTimer = 0;
         game.gameOver = false;
@@ -280,7 +286,7 @@
       function makeEnemy() {
         const p = game.player;
         const x = p.x + rand(520, 900);
-        game.enemies.push({ x, y: groundAt(x) - 70, w: 36, h: 70, throwIn: rand(0.3, 1), alive: true });
+        game.enemies.push({ x, y: groundAt(x) - 70, w: 36, h: 70, alive: true });
       }
 
       function makeBall(enemy) {
@@ -341,6 +347,9 @@
         }
         game.paused = true;
         game.lifePauseTimer = 5;
+        game.survivalTime = 0;
+        game.ballTimer = 2;
+        game.queuedShots = [];
         lifeOverlay.classList.add('show');
       }
 
@@ -400,11 +409,33 @@
 
         for (const enemy of game.enemies) {
           enemy.y = groundAt(enemy.x) - enemy.h;
-          enemy.throwIn -= dt;
-          if (enemy.throwIn <= 0) {
+        }
+
+        game.survivalTime += dt;
+        const minutesAlive = Math.floor(game.survivalTime / 60);
+        const speedFactor = Math.pow(1.1, minutesAlive);
+        const minInterval = 1;
+        const shotInterval = Math.max(minInterval, 2 / speedFactor);
+
+        for (const q of game.queuedShots) q.delay -= dt;
+        const readyShots = game.queuedShots.filter((q) => q.delay <= 0);
+        game.queuedShots = game.queuedShots.filter((q) => q.delay > 0);
+        for (const q of readyShots) {
+          if (q.enemy.alive) makeBall(q.enemy);
+        }
+
+        game.ballTimer -= dt;
+        if (game.ballTimer <= 0) {
+          const throwers = game.enemies.filter((e) => e.alive && e.x > p.x + 120 && e.x < p.x + 1050);
+          if (throwers.length > 0) {
+            const enemy = throwers[Math.floor(Math.random() * throwers.length)];
             makeBall(enemy);
-            enemy.throwIn = rand(0.9, 1.7);
+
+            if (game.survivalTime >= 60 && Math.random() < 0.35) {
+              game.queuedShots.push({ enemy, delay: rand(0.55, 0.95) });
+            }
           }
+          game.ballTimer = shotInterval;
         }
 
         for (const ball of game.balls) {
