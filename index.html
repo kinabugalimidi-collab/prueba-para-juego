@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Juego simple: Atrapa el cuadro</title>
+    <style>
+      :root {
+        font-family: Arial, Helvetica, sans-serif;
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f3f6ff;
+      }
+
+      .game {
+        width: min(92vw, 600px);
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+        padding: 1rem 1rem 1.5rem;
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.5rem;
+      }
+
+      .hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        padding: 0.65rem 0.9rem;
+        background: #2e6bff;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .arena {
+        position: relative;
+        width: 100%;
+        height: 360px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #e8eeff, #d7e4ff);
+        border: 2px dashed #8aa5ff;
+      }
+
+      .target {
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: #ff3b5c;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+        cursor: pointer;
+        transition: transform 0.12s ease;
+      }
+
+      .target:active {
+        transform: scale(0.9);
+      }
+
+      .msg {
+        margin-top: 0.75rem;
+        color: #334;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="game">
+      <h1>Atrapa el cuadro</h1>
+      <div class="hud">
+        <p>Puntos: <strong id="score">0</strong></p>
+        <p>Tiempo: <strong id="time">20</strong>s</p>
+        <button id="startBtn">Iniciar</button>
+      </div>
+      <section id="arena" class="arena" aria-label="Área de juego">
+        <button id="target" class="target" aria-label="Objetivo" hidden></button>
+      </section>
+      <p id="message" class="msg">Presiona "Iniciar" para jugar.</p>
+    </main>
+
+    <script>
+      const arena = document.getElementById('arena');
+      const target = document.getElementById('target');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const messageEl = document.getElementById('message');
+      const startBtn = document.getElementById('startBtn');
+
+      const TOTAL_TIME = 20;
+      let score = 0;
+      let timeLeft = TOTAL_TIME;
+      let timerId = null;
+      let playing = false;
+
+      function randomPosition() {
+        const maxX = arena.clientWidth - target.offsetWidth;
+        const maxY = arena.clientHeight - target.offsetHeight;
+        const x = Math.floor(Math.random() * Math.max(maxX, 1));
+        const y = Math.floor(Math.random() * Math.max(maxY, 1));
+        target.style.left = `${x}px`;
+        target.style.top = `${y}px`;
+      }
+
+      function finishGame() {
+        playing = false;
+        clearInterval(timerId);
+        target.hidden = true;
+        startBtn.disabled = false;
+        messageEl.textContent = `⏱️ Tiempo terminado. Puntaje final: ${score}`;
+      }
+
+      function tick() {
+        timeLeft -= 1;
+        timeEl.textContent = timeLeft;
+        if (timeLeft <= 0) {
+          finishGame();
+        }
+      }
+
+      function startGame() {
+        score = 0;
+        timeLeft = TOTAL_TIME;
+        scoreEl.textContent = score;
+        timeEl.textContent = timeLeft;
+        messageEl.textContent = '¡Haz clic en el cuadro rojo tantas veces como puedas!';
+
+        playing = true;
+        startBtn.disabled = true;
+        target.hidden = false;
+        randomPosition();
+
+        clearInterval(timerId);
+        timerId = setInterval(tick, 1000);
+      }
+
+      target.addEventListener('click', () => {
+        if (!playing) return;
+        score += 1;
+        scoreEl.textContent = score;
+        randomPosition();
+      });
+
+      startBtn.addEventListener('click', startGame);
+      window.addEventListener('resize', () => {
+        if (playing) randomPosition();
+      });
+    </script>
+  </body>
+</html>
