@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Titi Galimidi Futbol - Base 2.5D Babylon</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <canvas id="renderCanvas"></canvas>
+
+      <div class="hud" id="hud">
+        <span class="panel">Puntos: <strong id="hudScore">0</strong></span>
+        <span class="panel">Vidas: <strong id="hudLives">3</strong></span>
+        <span class="panel">Distancia: <strong id="hudDistance">0</strong></span>
+        <span class="panel">Estado: <strong id="hudState">idle</strong></span>
+        <span class="panel">Escudo: <strong id="hudShield">listo</strong></span>
+        <span class="panel">Etapa: <strong id="hudStage">1</strong></span>
+      </div>
+
+      <div class="touch-controls" aria-label="Controles táctiles">
+        <div class="touch-left">
+          <button class="touch-btn" data-action="left">◀</button>
+          <button class="touch-btn" data-action="right">▶</button>
+        </div>
+        <div class="touch-right">
+          <button class="touch-btn jump" data-action="jump">⤒ Saltar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>
