@@ -1,8 +1,8 @@
 diff --git a/README.md b/README.md
-index 6f45658e96580d496ddb7b0c590ed8765b892e0b..dbbbffa317f664dc2305f96ce251d834e4c1a87c 100644
+index 6f45658e96580d496ddb7b0c590ed8765b892e0b..4df8ac8cf4c0e169c82990495be8f32ae085d1c1 100644
 --- a/README.md
 +++ b/README.md
-@@ -1,2 +1,78 @@
+@@ -1,2 +1,111 @@
  # prueba-para-juego
 -Mi primer repositorio
 +
@@ -82,3 +82,36 @@ index 6f45658e96580d496ddb7b0c590ed8765b892e0b..dbbbffa317f664dc2305f96ce251d834
 +- Se agregaron efectos de sonido para disparo, escudo, impactos, pérdida de vida y cambio de etapa.
 +- El botón `🔊 Audio` permite activar/desactivar audio en cualquier momento.
 +- En móviles y algunos navegadores, el audio inicia al primer toque/tecla por políticas del navegador.
++
++## Base 2.5D paralela (Babylon.js)
++
++Se agregó una base nueva y **no destructiva** en `babylon25d/` para migración incremental del juego 2D actual.
++
++### Estructura
++
++- `babylon25d/index.html`
++- `babylon25d/style.css`
++- `babylon25d/js/main.js`
++- `babylon25d/js/scene.js`
++- `babylon25d/js/player.js`
++- `babylon25d/js/controls.js`
++- `babylon25d/js/hud.js`
++- `babylon25d/js/gameState.js`
++
++### Ejecutar
++
++1. Mantén el juego 2D original como está (`index.html` en raíz).
++2. Para la base 2.5D abre `babylon25d/index.html`.
++3. Recomendado: usar servidor local para móviles y módulos ES:
++   - `python3 -m http.server 8080`
++   - abrir `http://localhost:8080/babylon25d/`
++
++### Controles base 2.5D
++
++- Teclado: `←`/`→` mover, `↑` o espacio saltar.
++- Móvil: botones táctiles (izquierda/derecha y salto).
++
++### Alcance de esta base
++
++Incluye escena 2.5D, cámara lateral fija, gravedad, colisión con suelo, movimiento lateral, salto, HUD (puntos/vidas/distancia/estado/escudo/etapa) y controles táctiles.
++Queda lista para añadir luego: disparo, escudo funcional, enemigos, obstáculos y etapas avanzadas.
